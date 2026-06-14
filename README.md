@@ -1,5 +1,5 @@
 Team Name:Team 5Team 
-S.No  Name
+
 1.    VUDATTA SATYA VENKATA NAGA PRAJNA
 2.    Rai Bhuvaneswari Devi
 3.    VELUGULA DIGVIJAY SAI GANESH
