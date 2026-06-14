@@ -7,7 +7,7 @@
 const SSLWATCH_CONFIG = {
   APP_NAME: 'SSLWatch',
   APP_ENV: 'development',
-  API_BASE_URL: '',
+  API_BASE_URL: 'https://ssl-certificate-expiry-watcher-tknx.onrender.com',
   REQUEST_TIMEOUT_MS: 15000,
   ...(window.SSLWATCH_CONFIG || {})
 };
