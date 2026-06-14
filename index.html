@@ -1,0 +1,1370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SSL Watcher</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+const API_BASE_URL = "https://ssl-certificate-expiry-watcher-tknx.onrender.com";
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+--bg:#0C0A14;--bg2:#120F1E;--bg3:#1A1628;--card:#1E1A2E;--card2:#261F3A;
+--border:#2E2548;--border2:#3D3260;
+--cyan:#A78BFA;--cyan2:#8B5CF6;--cyan-dim:#A78BFA22;
+--amber:#FBBF24;--amber-dim:#FBBF2422;
+--red:#FB7185;--red-dim:#FB718522;
+--green:#34D399;--green-dim:#34D39922;
+--purple:#F472B6;--purple-dim:#F472B622;
+--text:#EDE9FE;--text2:#9D8EC4;--text3:#5B4F80;
+--font-display:'Outfit',sans-serif;
+--font-body:'Plus Jakarta Sans',sans-serif;
+--font-mono:'Fira Code',monospace;
+}
+html,body{background:var(--bg);color:var(--text);font-family:var(--font-body);min-height:100vh;overflow-x:hidden}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:var(--bg2)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* Animated grid background */
+.grid-bg{position:fixed;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:60px 60px;opacity:.15;pointer-events:none;z-index:0}
+.grid-bg::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 80% 50% at 50% 0%,#100C20 0%,transparent 70%)}
+
+/* Pulse glow orb */
+.orb{position:fixed;top:-200px;left:50%;transform:translateX(-50%);width:800px;height:500px;background:radial-gradient(ellipse at center,rgba(167,139,250,.07) 0%,transparent 70%);pointer-events:none;z-index:0;animation:orbPulse 8s ease-in-out infinite}
+@keyframes orbPulse{0%,100%{opacity:.6;transform:translateX(-50%) scale(1)}50%{opacity:1;transform:translateX(-50%) scale(1.1)}}
+
+/* Layout */
+.app{position:relative;z-index:1;display:flex;flex-direction:column;min-height:100vh}
+
+/* Header */
+.header{display:flex;align-items:center;justify-content:space-between;padding:16px 28px;border-bottom:1px solid var(--border);background:rgba(12,10,20,.88);backdrop-filter:blur(12px);position:sticky;top:0;z-index:100}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{width:34px;height:34px;border-radius:8px;background:var(--cyan-dim);border:1px solid var(--cyan2);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.logo-icon::before{content:'';position:absolute;inset:0;background:conic-gradient(from 0deg,transparent 270deg,var(--cyan) 360deg);border-radius:8px;animation:spin 3s linear infinite;opacity:.5}
+.logo-icon i{font-size:15px;color:var(--cyan);position:relative;z-index:1}
+.logo-text{font-family:var(--font-display);font-size:17px;font-weight:700;letter-spacing:-.3px}
+.logo-text span{color:var(--cyan)}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.header-nav{display:flex;gap:4px}
+.nav-btn{background:none;border:none;padding:7px 14px;border-radius:6px;color:var(--text2);font-size:13px;font-family:var(--font-body);cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px}
+.nav-btn:hover{background:var(--card);color:var(--text)}
+.nav-btn.active{background:var(--cyan-dim);color:var(--cyan);border:1px solid rgba(167,139,250,.3)}
+.header-actions{display:flex;align-items:center;gap:10px}
+.btn-add{background:linear-gradient(135deg,var(--cyan),var(--cyan2));color:#fff;border:none;padding:8px 16px;border-radius:7px;font-size:13px;font-weight:600;font-family:var(--font-body);cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .2s;letter-spacing:.2px;box-shadow:0 0 16px rgba(167,139,250,.3)}
+.btn-add:hover{background:linear-gradient(135deg,#C4B5FD,var(--cyan));transform:translateY(-1px);box-shadow:0 0 24px rgba(167,139,250,.5)}
+.notif-btn{background:var(--card);border:1px solid var(--border);width:34px;height:34px;border-radius:7px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);position:relative;transition:all .2s}
+.notif-btn:hover{border-color:var(--border2);color:var(--text)}
+.notif-dot{width:8px;height:8px;background:var(--red);border-radius:50%;position:absolute;top:6px;right:6px;border:1.5px solid var(--bg2);animation:blinkDot 2s infinite}
+@keyframes blinkDot{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* Main layout */
+.main{display:flex;flex:1;overflow:hidden}
+.sidebar{width:220px;flex-shrink:0;border-right:1px solid var(--border);padding:20px 0;background:var(--bg2);display:flex;flex-direction:column;gap:2px}
+.sidebar-label{padding:4px 18px 8px;font-size:10px;letter-spacing:1.5px;color:var(--text3);text-transform:uppercase;font-weight:600;margin-top:8px}
+.sidebar-item{display:flex;align-items:center;gap:10px;padding:9px 18px;cursor:pointer;transition:all .2s;color:var(--text2);font-size:13.5px;border-left:2px solid transparent;margin:1px 0}
+.sidebar-item:hover{background:var(--card);color:var(--text);border-left-color:var(--border2)}
+.sidebar-item.active{background:linear-gradient(90deg,rgba(167,139,250,.18),rgba(167,139,250,.06));color:var(--cyan);border-left-color:var(--cyan);box-shadow:inset 0 0 12px rgba(167,139,250,.08)}
+.sidebar-item i{width:18px;font-size:14px;text-align:center}
+.sidebar-badge{margin-left:auto;background:var(--red);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;min-width:20px;text-align:center}
+.sidebar-badge.warn{background:var(--amber)}
+.sidebar-badge.ok{background:var(--green);color:#000}
+
+/* Content area */
+.content{flex:1;overflow-y:auto;padding:24px 28px}
+
+/* Views */
+.view{display:none}
+.view.active{display:block;animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* Page header */
+.page-hdr{margin-bottom:24px}
+.page-hdr h1{font-family:var(--font-display);font-size:24px;font-weight:700;margin-bottom:4px}
+.page-hdr p{color:var(--text2);font-size:14px}
+
+/* Stat cards row */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;position:relative;overflow:hidden;transition:border-color .2s}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:2px 2px 0 0}
+.stat-card.cyan::before{background:var(--cyan)}
+.stat-card.green::before{background:var(--green)}
+.stat-card.amber::before{background:var(--amber)}
+.stat-card.red::before{background:var(--red)}
+.stat-card:hover{border-color:var(--border2);box-shadow:0 4px 24px rgba(167,139,250,.08);transform:translateY(-2px)}
+.stat-label{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:10px;font-weight:600}
+.stat-val{font-family:var(--font-display);font-size:32px;font-weight:700;line-height:1}
+.stat-val.cyan{color:var(--cyan)}
+.stat-val.green{color:var(--green)}
+.stat-val.amber{color:var(--amber)}
+.stat-val.red{color:var(--red)}
+.stat-sub{font-size:12px;color:var(--text2);margin-top:6px;display:flex;align-items:center;gap:5px}
+.stat-icon{position:absolute;bottom:14px;right:16px;font-size:36px;opacity:.06}
+
+/* Section header */
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.sec-hdr h2{font-family:var(--font-display);font-size:16px;font-weight:600}
+.sec-hdr-actions{display:flex;gap:8px}
+
+/* Domain table */
+.domain-table{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.dt-header{display:grid;grid-template-columns:2fr 1.2fr 1.2fr 1fr 1fr 120px;gap:0;padding:10px 18px;background:var(--bg3);border-bottom:1px solid var(--border)}
+.dt-header span{font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--text3);font-weight:600}
+.dt-row{display:grid;grid-template-columns:2fr 1.2fr 1.2fr 1fr 1fr 120px;gap:0;padding:14px 18px;border-bottom:1px solid var(--border);transition:background .15s;align-items:center;cursor:pointer}
+.dt-row:last-child{border-bottom:none}
+.dt-row:hover{background:var(--card2)}
+.domain-name{display:flex;align-items:center;gap:10px}
+.domain-favicon{width:24px;height:24px;border-radius:5px;background:var(--card2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--cyan)}
+.domain-url{font-family:var(--font-mono);font-size:13px;font-weight:500;color:var(--text)}
+.domain-org{font-size:11px;color:var(--text2);margin-top:1px}
+.cert-status{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:99px;font-size:12px;font-weight:600}
+.status-valid{background:var(--green-dim);color:var(--green);border:1px solid rgba(0,230,118,.2)}
+.status-warn{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(255,165,0,.2)}
+.status-critical{background:var(--red-dim);color:var(--red);border:1px solid rgba(255,68,102,.2)}
+.status-expired{background:rgba(255,68,102,.35);color:var(--red);border:1px solid var(--red)}
+.expiry-text{font-size:13px;color:var(--text)}
+.expiry-days{font-size:11px;color:var(--text2);margin-top:1px}
+.progress-wrap{display:flex;flex-direction:column;gap:4px}
+.progress-bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.progress-fill{height:100%;border-radius:2px;transition:width .6s ease}
+.issuer-text{font-size:12px;color:var(--text2);font-family:var(--font-mono)}
+.row-actions{display:flex;gap:6px;justify-content:flex-end}
+.icon-btn{background:none;border:1px solid var(--border);width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);font-size:12px;transition:all .2s}
+.icon-btn:hover{border-color:var(--border2);color:var(--text);background:var(--card2)}
+.icon-btn.del:hover{border-color:var(--red);color:var(--red)}
+
+/* Add domain modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:999;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.modal-overlay.open{display:flex;animation:fadeIn .2s ease}
+.modal{background:var(--card);border:1px solid var(--border2);border-radius:16px;width:480px;padding:28px;box-shadow:0 24px 80px rgba(0,0,0,.6)}
+.modal-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
+.modal-hdr h3{font-family:var(--font-display);font-size:18px;font-weight:700}
+.modal-close{background:none;border:1px solid var(--border);width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text2);transition:all .2s}
+.modal-close:hover{border-color:var(--red);color:var(--red)}
+.form-group{margin-bottom:16px}
+.form-label{font-size:12px;color:var(--text2);font-weight:500;margin-bottom:6px;display:block;letter-spacing:.3px}
+.form-input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-size:14px;font-family:var(--font-body);outline:none;transition:border-color .2s}
+.form-input:focus{border-color:var(--cyan2)}
+.form-input::placeholder{color:var(--text3)}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-select{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-size:14px;font-family:var(--font-body);outline:none;cursor:pointer}
+.form-select option{background:var(--bg3)}
+.modal-footer{display:flex;gap:10px;margin-top:22px}
+.btn-primary{flex:1;background:linear-gradient(135deg,var(--cyan),var(--cyan2));color:#fff;border:none;padding:11px;border-radius:8px;font-size:14px;font-weight:600;font-family:var(--font-body);cursor:pointer;transition:all .2s;box-shadow:0 0 14px rgba(167,139,250,.3)}
+.btn-primary:hover{opacity:.9;box-shadow:0 0 22px rgba(167,139,250,.5)}
+.btn-secondary{background:var(--card2);border:1px solid var(--border);padding:11px 20px;border-radius:8px;font-size:14px;color:var(--text2);font-family:var(--font-body);cursor:pointer;transition:all .2s}
+.btn-secondary:hover{border-color:var(--border2);color:var(--text)}
+
+/* Cert detail panel */
+.detail-panel{background:var(--card);border:1px solid var(--border2);border-radius:14px;padding:22px;margin-bottom:20px}
+.detail-panel-hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px}
+.detail-back{background:none;border:1px solid var(--border);padding:7px 13px;border-radius:7px;color:var(--text2);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .2s;font-family:var(--font-body)}
+.detail-back:hover{border-color:var(--border2);color:var(--text)}
+
+/* Shield animation */
+.shield-wrap{display:flex;flex-direction:column;align-items:center;padding:28px;margin-bottom:24px;background:var(--card);border:1px solid var(--border);border-radius:14px}
+.shield-anim{position:relative;width:100px;height:100px;margin-bottom:16px}
+.shield-ring{position:absolute;inset:0;border-radius:50%;border:2px solid;animation:ringPulse 2s ease-in-out infinite}
+.shield-ring.r1{border-color:rgba(167,139,250,.5);animation-delay:0s}
+.shield-ring.r2{border-color:rgba(167,139,250,.25);animation-delay:.4s;inset:-12px}
+.shield-ring.r3{border-color:rgba(167,139,250,.1);animation-delay:.8s;inset:-24px}
+@keyframes ringPulse{0%{transform:scale(.9);opacity:0}50%{opacity:1}100%{transform:scale(1.1);opacity:0}}
+.shield-core{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--cyan-dim);border-radius:50%;border:1px solid var(--cyan);z-index:2}
+.shield-core i{font-size:36px;color:var(--cyan)}
+
+/* Cert info grid */
+.cert-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.cert-field{background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:14px}
+.cert-field-label{font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--text3);margin-bottom:6px;font-weight:600}
+.cert-field-val{font-family:var(--font-mono);font-size:13px;color:var(--text);word-break:break-all;line-height:1.5}
+.cert-field-val.green{color:var(--green)}
+.cert-field-val.amber{color:var(--amber)}
+.cert-field-val.red{color:var(--red)}
+.cert-field-val.cyan{color:var(--cyan)}
+.cert-field.span2{grid-column:span 2}
+
+/* Expiry timeline */
+.timeline-wrap{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:20px}
+.timeline-bar{height:12px;background:var(--bg3);border-radius:6px;overflow:hidden;margin:14px 0 8px;position:relative}
+.timeline-fill{height:100%;border-radius:6px;transition:width 1s ease;position:relative;overflow:hidden}
+.timeline-fill::after{content:'';position:absolute;top:0;left:-100%;width:200%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.15),transparent);animation:shimmer 2.5s infinite}
+@keyframes shimmer{to{left:100%}}
+.timeline-labels{display:flex;justify-content:space-between;font-size:11px;color:var(--text3)}
+.countdown-row{display:flex;gap:12px;justify-content:center;margin-top:16px}
+.countdown-box{background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px 18px;text-align:center;min-width:70px}
+.countdown-num{font-family:var(--font-display);font-size:28px;font-weight:700;color:var(--cyan);line-height:1}
+.countdown-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-top:3px}
+
+/* Risk analysis */
+.risk-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:20px}
+.risk-score-wrap{display:flex;align-items:center;gap:20px;margin-bottom:18px}
+.risk-score-circle{width:80px;height:80px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;border:3px solid}
+.risk-score-circle.low{border-color:var(--green);color:var(--green)}
+.risk-score-circle.medium{border-color:var(--amber);color:var(--amber)}
+.risk-score-circle.high{border-color:var(--red);color:var(--red)}
+.risk-score-num{font-family:var(--font-display);font-size:26px;font-weight:700;line-height:1}
+.risk-score-lbl{font-size:10px;letter-spacing:.5px}
+.risk-items{display:flex;flex-direction:column;gap:8px}
+.risk-item{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px}
+.risk-item i{font-size:14px;margin-top:1px;flex-shrink:0}
+.risk-item-text{font-size:13px;color:var(--text2);line-height:1.5}
+.risk-item-text strong{color:var(--text);font-weight:500}
+
+/* Alerts view */
+.alert-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:12px;display:flex;align-items:flex-start;gap:14px;transition:border-color .2s}
+.alert-card:hover{border-color:var(--border2)}
+.alert-icon{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px}
+.alert-icon.red{background:var(--red-dim);color:var(--red)}
+.alert-icon.amber{background:var(--amber-dim);color:var(--amber)}
+.alert-icon.green{background:var(--green-dim);color:var(--green)}
+.alert-icon.cyan{background:var(--cyan-dim);color:var(--cyan)}
+.alert-body{flex:1}
+.alert-title{font-size:14px;font-weight:500;margin-bottom:3px}
+.alert-desc{font-size:12px;color:var(--text2);line-height:1.5}
+.alert-meta{font-size:11px;color:var(--text3);margin-top:5px;display:flex;align-items:center;gap:5px}
+.alert-chip{padding:3px 8px;border-radius:99px;font-size:11px;font-weight:600;background:var(--red-dim);color:var(--red)}
+.alert-chip.warn{background:var(--amber-dim);color:var(--amber)}
+.alert-chip.info{background:var(--cyan-dim);color:var(--cyan)}
+.alert-actions{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.dismiss-btn{background:none;border:1px solid var(--border);padding:5px 12px;border-radius:6px;font-size:12px;color:var(--text2);cursor:pointer;transition:all .2s;font-family:var(--font-body)}
+.dismiss-btn:hover{border-color:var(--border2);color:var(--text)}
+
+/* Alert rules */
+.rules-section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:20px}
+.rule-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)}
+.rule-row:last-child{border-bottom:none}
+.rule-info{flex:1}
+.rule-name{font-size:14px;font-weight:500}
+.rule-desc{font-size:12px;color:var(--text2);margin-top:2px}
+.toggle{position:relative;width:36px;height:20px;cursor:pointer;display:flex;align-items:center}
+.toggle input{opacity:0;width:0;height:0;position:absolute}
+.toggle-track{width:36px;height:20px;background:var(--border2);border-radius:10px;transition:background .2s;position:relative}
+.toggle input:checked+.toggle-track{background:var(--cyan)}
+.toggle-thumb{position:absolute;width:14px;height:14px;background:#fff;border-radius:50%;left:3px;top:3px;transition:transform .2s}
+.toggle input:checked~.toggle-thumb,.toggle input:checked+.toggle-track+.toggle-thumb{transform:translateX(16px)}
+
+/* Reports view */
+.report-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.report-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+.report-card::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at bottom left,var(--cyan-dim),transparent 60%);opacity:0;transition:opacity .3s}
+.report-card:hover{border-color:var(--border2)}
+.report-card:hover::after{opacity:1}
+.report-icon{width:42px;height:42px;border-radius:10px;background:var(--cyan-dim);border:1px solid rgba(167,139,250,.2);display:flex;align-items:center;justify-content:center;color:var(--cyan);font-size:18px;margin-bottom:14px;position:relative;z-index:1}
+.report-card h3{font-family:var(--font-display);font-size:15px;font-weight:600;margin-bottom:6px;position:relative;z-index:1}
+.report-card p{font-size:12px;color:var(--text2);line-height:1.6;position:relative;z-index:1}
+.report-meta{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:11px;color:var(--text3);position:relative;z-index:1}
+.generate-btn{background:var(--bg3);border:1px solid var(--border);padding:7px 14px;border-radius:7px;color:var(--text2);font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .2s;font-family:var(--font-body);margin-top:10px;width:100%;justify-content:center;position:relative;z-index:1}
+.generate-btn:hover{border-color:var(--cyan);color:var(--cyan)}
+
+/* Chart area */
+.chart-section{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:20px}
+
+/* Toast */
+.toast-wrap{position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:10px}
+.toast{background:var(--card2);border:1px solid var(--border2);border-radius:10px;padding:12px 16px;min-width:280px;display:flex;align-items:center;gap:10px;animation:slideIn .3s ease;box-shadow:0 8px 30px rgba(0,0,0,.5)}
+.toast.success .toast-icon{color:var(--green)}
+.toast.error .toast-icon{color:var(--red)}
+.toast.info .toast-icon{color:var(--cyan)}
+.toast-icon{font-size:16px}
+.toast-text{font-size:13px;color:var(--text)}
+@keyframes slideIn{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
+
+/* AI analyzing spinner */
+.ai-loader{display:flex;align-items:center;gap:10px;padding:14px;background:var(--bg3);border:1px solid var(--border);border-radius:8px;margin-bottom:12px}
+.spinner{width:18px;height:18px;border:2px solid var(--border2);border-top-color:var(--purple);border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+.ai-text{font-size:13px;color:var(--text2)}
+.ai-text span{color:var(--purple)}
+
+/* Settings view */
+.settings-section{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px}
+.settings-section h3{font-family:var(--font-display);font-size:15px;font-weight:600;margin-bottom:16px;color:var(--text)}
+.setting-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)}
+.setting-row:last-child{border-bottom:none}
+.setting-info h4{font-size:14px;font-weight:500}
+.setting-info p{font-size:12px;color:var(--text2);margin-top:2px;max-width:360px}
+
+/* ===== AUTH SCREEN ===== */
+.auth-overlay{position:fixed;inset:0;z-index:10000;background:var(--bg);display:flex;align-items:center;justify-content:center;animation:fadeIn .4s ease}
+.auth-overlay.hidden{display:none}
+.auth-box{background:var(--card);border:1px solid var(--border2);border-radius:20px;padding:40px 36px;width:100%;max-width:420px;position:relative;box-shadow:0 32px 100px rgba(0,0,0,.7)}
+.auth-box::before{content:'';position:absolute;top:-1px;left:50%;transform:translateX(-50%);width:60%;height:2px;background:linear-gradient(90deg,transparent,var(--cyan),rgba(244,114,182,.8),var(--cyan),transparent);border-radius:2px}
+.auth-logo{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:28px}
+.auth-logo-icon{width:44px;height:44px;border-radius:11px;background:var(--cyan-dim);border:1px solid var(--cyan2);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+.auth-logo-icon::before{content:'';position:absolute;inset:0;background:conic-gradient(from 0deg,transparent 270deg,var(--cyan) 360deg);border-radius:11px;animation:spin 3s linear infinite;opacity:.5}
+.auth-logo-icon i{font-size:20px;color:var(--cyan);position:relative;z-index:1}
+.auth-logo-text{font-family:var(--font-display);font-size:22px;font-weight:700}
+.auth-logo-text span{color:var(--cyan)}
+.auth-tabs{display:flex;gap:0;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:4px;margin-bottom:28px}
+.auth-tab{flex:1;padding:8px;border-radius:7px;border:none;background:none;color:var(--text2);font-size:14px;font-weight:500;font-family:var(--font-body);cursor:pointer;transition:all .2s}
+.auth-tab.active{background:linear-gradient(135deg,rgba(167,139,250,.2),rgba(139,92,246,.15));color:var(--text);border:1px solid rgba(167,139,250,.4)}
+.auth-title{font-family:var(--font-display);font-size:20px;font-weight:700;margin-bottom:4px;text-align:center}
+.auth-sub{font-size:13px;color:var(--text2);margin-bottom:24px;text-align:center}
+.auth-form-group{margin-bottom:16px}
+.auth-label{display:block;font-size:12px;color:var(--text2);font-weight:500;margin-bottom:6px;letter-spacing:.3px}
+.auth-input-wrap{position:relative}
+.auth-input-wrap i{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px;pointer-events:none}
+.auth-input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:11px 14px 11px 38px;color:var(--text);font-size:14px;font-family:var(--font-body);outline:none;transition:border-color .2s}
+.auth-input:focus{border-color:var(--cyan2)}
+.auth-input::placeholder{color:var(--text3)}
+.auth-btn{width:100%;background:linear-gradient(135deg,var(--cyan),var(--cyan2));color:#fff;border:none;padding:13px;border-radius:9px;font-size:15px;font-weight:700;font-family:var(--font-display);cursor:pointer;transition:all .2s;letter-spacing:.3px;margin-top:4px;box-shadow:0 0 18px rgba(167,139,250,.35)}
+.auth-btn:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 0 28px rgba(167,139,250,.5)}
+.auth-divider{display:flex;align-items:center;gap:12px;margin:20px 0}
+.auth-divider span{font-size:12px;color:var(--text3);white-space:nowrap}
+.auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--border)}
+.auth-oauth{display:flex;gap:10px}
+.oauth-btn{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:10px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all .2s;font-family:var(--font-body)}
+.oauth-btn:hover{border-color:var(--border2);color:var(--text)}
+.auth-error{background:var(--red-dim);border:1px solid rgba(255,68,102,.3);border-radius:8px;padding:10px 14px;font-size:13px;color:var(--red);margin-bottom:14px;display:none;align-items:center;gap:8px}
+.auth-error.show{display:flex}
+.auth-footer{text-align:center;margin-top:20px;font-size:13px;color:var(--text2)}
+.auth-footer a{color:var(--cyan);text-decoration:none;cursor:pointer}
+.auth-footer a:hover{text-decoration:underline}
+.auth-remember{display:flex;align-items:center;gap:8px;margin-bottom:16px}
+.auth-remember input{accent-color:var(--cyan);width:15px;height:15px;cursor:pointer}
+.auth-remember label{font-size:13px;color:var(--text2);cursor:pointer}
+.auth-forgot{float:right;font-size:12px;color:var(--cyan);text-decoration:none;cursor:pointer}
+.auth-forgot:hover{text-decoration:underline}
+/* Scanning indicator */
+.scan-row{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text2);padding:8px 0}
+.scan-dot{width:8px;height:8px;background:var(--green);border-radius:50%;animation:blinkDot 1.5s infinite}
+
+/* Empty state */
+.empty-state{text-align:center;padding:60px 20px;color:var(--text2)}
+.empty-state i{font-size:48px;color:var(--text3);margin-bottom:14px}
+.empty-state h3{font-size:16px;color:var(--text2);margin-bottom:6px}
+.empty-state p{font-size:13px;color:var(--text3)}
+</style>
+
+<div class="grid-bg"></div>
+<div class="orb"></div>
+
+<!-- ===== AUTH OVERLAY ===== -->
+<div class="auth-overlay" id="authOverlay">
+  <div class="auth-box">
+    <div class="auth-logo">
+      <div class="auth-logo-icon"><i class="fas fa-shield-halved"></i></div>
+      <div class="auth-logo-text">SSL<span>Watch</span></div>
+    </div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" onclick="switchAuthTab('login')">Sign In</button>
+      <button class="auth-tab" onclick="switchAuthTab('signup')">Create Account</button>
+    </div>
+
+    <!-- Login Form -->
+    <div id="authLogin">
+      <div class="auth-title">Welcome back</div>
+      <div class="auth-sub">Sign in to your SSL monitoring dashboard</div>
+      <div class="auth-error" id="loginError"><i class="fas fa-circle-xmark"></i><span id="loginErrorMsg">Invalid email or password.</span></div>
+      <div class="auth-form-group">
+        <label class="auth-label">Email address</label>
+        <div class="auth-input-wrap">
+          <i class="fas fa-envelope"></i>
+          <input class="auth-input" type="email" id="loginEmail" placeholder="you@company.com" />
+        </div>
+      </div>
+      <div class="auth-form-group">
+        <label class="auth-label">Password <a class="auth-forgot" onclick="forgotPassword()">Forgot password?</a></label>
+        <div class="auth-input-wrap">
+          <i class="fas fa-lock"></i>
+          <input class="auth-input" type="password" id="loginPassword" placeholder="••••••••" />
+        </div>
+      </div>
+      <div class="auth-remember">
+        <input type="checkbox" id="rememberMe" />
+        <label for="rememberMe">Keep me signed in</label>
+      </div>
+      <button class="auth-btn" onclick="doLogin()"><i class="fas fa-arrow-right-to-bracket"></i> &nbsp;Sign In</button>
+      <div class="auth-divider"><span>or continue with</span></div>
+      <div class="auth-oauth">
+        <button class="oauth-btn" onclick="oauthLogin('Google')"><i class="fab fa-google"></i> Google</button>
+        <button class="oauth-btn" onclick="oauthLogin('GitHub')"><i class="fab fa-github"></i> GitHub</button>
+        <button class="oauth-btn" onclick="oauthLogin('Microsoft')"><i class="fab fa-microsoft"></i> Microsoft</button>
+      </div>
+      <div class="auth-footer">Don't have an account? <a onclick="switchAuthTab('signup')">Create one free</a></div>
+    </div>
+
+    <!-- Signup Form -->
+    <div id="authSignup" style="display:none">
+      <div class="auth-title">Get started free</div>
+      <div class="auth-sub">Monitor unlimited SSL certificates in minutes</div>
+      <div class="auth-error" id="signupError"><i class="fas fa-circle-xmark"></i><span id="signupErrorMsg">Please fill in all fields.</span></div>
+      <div class="auth-form-group">
+        <label class="auth-label">Full name</label>
+        <div class="auth-input-wrap">
+          <i class="fas fa-user"></i>
+          <input class="auth-input" type="text" id="signupName" placeholder="Jane Smith" />
+        </div>
+      </div>
+      <div class="auth-form-group">
+        <label class="auth-label">Work email</label>
+        <div class="auth-input-wrap">
+          <i class="fas fa-envelope"></i>
+          <input class="auth-input" type="email" id="signupEmail" placeholder="you@company.com" />
+        </div>
+      </div>
+      <div class="auth-form-group">
+        <label class="auth-label">Password</label>
+        <div class="auth-input-wrap">
+          <i class="fas fa-lock"></i>
+          <input class="auth-input" type="password" id="signupPassword" placeholder="Min. 8 characters" />
+        </div>
+      </div>
+      <div class="auth-form-group">
+        <label class="auth-label">Confirm password</label>
+        <div class="auth-input-wrap">
+          <i class="fas fa-lock"></i>
+          <input class="auth-input" type="password" id="signupConfirm" placeholder="••••••••" />
+        </div>
+      </div>
+      <button class="auth-btn" onclick="doSignup()"><i class="fas fa-user-plus"></i> &nbsp;Create Account</button>
+      <div class="auth-divider"><span>or sign up with</span></div>
+      <div class="auth-oauth">
+        <button class="oauth-btn" onclick="oauthLogin('Google')"><i class="fab fa-google"></i> Google</button>
+        <button class="oauth-btn" onclick="oauthLogin('GitHub')"><i class="fab fa-github"></i> GitHub</button>
+        <button class="oauth-btn" onclick="oauthLogin('Microsoft')"><i class="fab fa-microsoft"></i> Microsoft</button>
+      </div>
+      <div class="auth-footer">Already have an account? <a onclick="switchAuthTab('login')">Sign in</a></div>
+    </div>
+  </div>
+</div>
+<!-- ===== END AUTH OVERLAY ===== -->
+
+<div class="app">
+  <!-- Header -->
+  <header class="header">
+    <div class="logo">
+      <div class="logo-icon"><i class="fas fa-shield-halved"></i></div>
+      <div class="logo-text">SSL<span>Watch</span></div>
+    </div>
+
+    <div class="header-actions">
+      <button class="notif-btn" onclick="refreshAll()" title="Refresh All" style="width:34px;height:34px"><i class="fas fa-rotate"></i></button>
+      <button class="notif-btn" onclick="showView('alerts')"><i class="fas fa-bell"></i><span class="notif-dot"></span></button>
+      <button class="btn-add" onclick="openModal()"><i class="fas fa-plus"></i> Add Domain</button>
+      <div id="userAvatar" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--card);transition:all .2s" onmouseenter="this.style.borderColor='var(--border2)'" onmouseleave="this.style.borderColor='var(--border)'" onclick="doLogout()">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--cyan-dim);border:1px solid var(--cyan);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--cyan)" id="avatarInitial">J</div>
+        <span id="avatarName" style="font-size:13px;color:var(--text2);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Jane</span>
+        <i class="fas fa-right-from-bracket" style="font-size:11px;color:var(--text3)"></i>
+      </div>
+    </div>
+  </header>
+
+  <div class="main">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-label">Monitor</div>
+      <div class="sidebar-item active" onclick="showView('dashboard')"><i class="fas fa-gauge-high"></i> Overview</div>
+      <div class="sidebar-item" onclick="showView('domains'); filterDomains('all');"><i class="fas fa-globe"></i> All Domains</div>
+      <div class="sidebar-item" onclick="showRiskView()"><i class="fas fa-robot"></i> AI Risk Analysis</div>
+      <div class="sidebar-label">System</div>
+      <div class="sidebar-item" onclick="showView('settings')"><i class="fas fa-sliders"></i> Settings</div>
+      <div class="sidebar-item" onclick="showView('reports')"><i class="fas fa-file-shield"></i> Reports</div>
+      <div class="sidebar-item" onclick="showView('review')"><i class="fas fa-magnifying-glass"></i> Review</div>
+
+    </aside>
+
+    <!-- Main content -->
+    <main class="content">
+
+      <!-- ========== DASHBOARD VIEW ========== -->
+      <div class="view active" id="view-dashboard">
+        <div class="page-hdr">
+          <h1>Security Dashboard</h1>
+          <p>Real-time SSL certificate monitoring across all your domains</p>
+        </div>
+
+        <div class="stats-row">
+          <div class="stat-card cyan" onclick="showView('domains'); filterDomains('all');" style="cursor:pointer">
+            <div class="stat-label">Total Domains</div>
+            <div class="stat-val cyan">8</div>
+            <div class="stat-sub"><i class="fas fa-circle-check" style="color:var(--cyan)"></i> All monitored</div>
+            <i class="fas fa-globe stat-icon"></i>
+          </div>
+          <div class="stat-card green" onclick="showView('domains'); filterDomains('valid');" style="cursor:pointer">
+            <div class="stat-label">Valid Certs</div>
+            <div class="stat-val green">5</div>
+            <div class="stat-sub"><i class="fas fa-arrow-trend-up" style="color:var(--green)"></i> 62.5% healthy</div>
+            <i class="fas fa-shield-halved stat-icon"></i>
+          </div>
+          <div class="stat-card amber" onclick="showView('domains'); filterDomains('warn');" style="cursor:pointer">
+            <div class="stat-label">Expiring Soon</div>
+            <div class="stat-val amber">2</div>
+            <div class="stat-sub"><i class="fas fa-clock" style="color:var(--amber)"></i> Within 30 days</div>
+            <i class="fas fa-hourglass-half stat-icon"></i>
+          </div>
+          <div class="stat-card red" onclick="showView('domains'); filterDomains('critical');" style="cursor:pointer">
+            <div class="stat-label">Critical / Expired</div>
+            <div class="stat-val red">1</div>
+            <div class="stat-sub"><i class="fas fa-triangle-exclamation" style="color:var(--red)"></i> Action required</div>
+            <i class="fas fa-xmark stat-icon"></i>
+          </div>
+        </div>
+
+        <!-- Chart + scan status -->
+        <div style="display:grid;grid-template-columns:1.8fr 1fr;gap:16px;margin-bottom:20px">
+          <div class="chart-section">
+            <div class="sec-hdr"><h2>Certificate Health Timeline</h2><span style="font-size:12px;color:var(--text2)">Last 30 days</span></div>
+            <div style="position:relative;height:220px">
+              <canvas id="healthChart" role="img" aria-label="Certificate health over 30 days"></canvas>
+            </div>
+          </div>
+          <div class="chart-section">
+            <div class="sec-hdr"><h2>Status Breakdown</h2></div>
+            <div style="position:relative;height:160px">
+              <canvas id="statusChart" role="img" aria-label="Donut chart of certificate status"></canvas>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px">
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
+                <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block"></span><span style="color:var(--text2)">Valid</span></span><span style="color:var(--green);font-weight:600">5</span>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
+                <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:var(--amber);display:inline-block"></span><span style="color:var(--text2)">Expiring</span></span><span style="color:var(--amber);font-weight:600">2</span>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px">
+                <span style="display:flex;align-items:center;gap:6px"><span style="width:8px;height:8px;border-radius:50%;background:var(--red);display:inline-block"></span><span style="color:var(--text2)">Critical</span></span><span style="color:var(--red);font-weight:600">1</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent domains table (dashboard) -->
+        <div class="sec-hdr">
+          <h2>Recent Domains</h2>
+          <div class="sec-hdr-actions">
+            <div class="scan-row"><span class="scan-dot"></span>Live scanning</div>
+            <button class="icon-btn" onclick="showView('domains')" title="View all"><i class="fas fa-arrow-right"></i></button>
+          </div>
+        </div>
+        <div id="mini-domain-table"></div>
+      </div>
+
+      <!-- ========== DOMAINS VIEW ========== -->
+      <div class="view" id="view-domains">
+        <div class="page-hdr">
+          <h1>All Domains</h1>
+          <p>Manage and monitor all SSL certificates across your infrastructure</p>
+        </div>
+        <div class="sec-hdr">
+          <h2>Monitored Domains <span style="color:var(--text3);font-size:13px;font-weight:400" id="domain-count">(8 total)</span></h2>
+          <div class="sec-hdr-actions">
+            <select class="form-select" style="padding:7px 12px;font-size:13px;width:auto" onchange="filterDomains(this.value)">
+              <option value="all">All Status</option>
+              <option value="valid">Valid</option>
+              <option value="warn">Expiring Soon</option>
+              <option value="critical">Critical</option>
+              <option value="expired">Expired</option>
+            </select>
+            <button class="icon-btn" onclick="refreshAll()" title="Refresh all" style="width:32px;height:32px"><i class="fas fa-rotate"></i></button>
+          </div>
+        </div>
+        <div id="full-domain-table"></div>
+      </div>
+
+      <!-- ========== DETAIL VIEW ========== -->
+      <div class="view" id="view-detail">
+        <div id="detail-content"></div>
+      </div>
+
+      <!-- ========== ALERTS VIEW ========== -->
+      <div class="view" id="view-alerts">
+        <div class="page-hdr">
+          <h1>Alerts & Notifications</h1>
+          <p>Active alerts, dismissals, and notification rules for your domains</p>
+        </div>
+
+        <div class="sec-hdr" style="margin-bottom:16px">
+          <h2>Active Alerts</h2>
+          <button class="icon-btn" onclick="dismissAll()" style="width:auto;padding:0 12px;font-size:12px;color:var(--text2)">Dismiss all</button>
+        </div>
+        <div id="alerts-list"></div>
+
+        <div class="sec-hdr" style="margin-top:24px;margin-bottom:14px"><h2>Notification Rules</h2></div>
+        <div class="rules-section">
+          <div class="rule-row">
+            <div class="rule-info"><div class="rule-name">30-day expiry warning</div><div class="rule-desc">Send alert when certificate expires in 30 days</div></div>
+            <label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+          <div class="rule-row">
+            <div class="rule-info"><div class="rule-name">14-day critical alert</div><div class="rule-desc">Escalate alert when 14 days remain</div></div>
+            <label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+          <div class="rule-row">
+            <div class="rule-info"><div class="rule-name">7-day emergency alert</div><div class="rule-desc">Send emergency notification at 7 days</div></div>
+            <label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+          <div class="rule-row">
+            <div class="rule-info"><div class="rule-name">Expiry day notification</div><div class="rule-desc">Final alert on the certificate expiry date</div></div>
+            <label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+          <div class="rule-row">
+            <div class="rule-info"><div class="rule-name">Certificate renewed</div><div class="rule-desc">Notify when a certificate is successfully renewed</div></div>
+            <label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+          <div class="rule-row">
+            <div class="rule-info"><div class="rule-name">Weekly digest email</div><div class="rule-desc">Send a weekly summary of all certificate statuses</div></div>
+            <label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== REPORTS VIEW ========== -->
+      <div class="view" id="view-reports">
+        <div class="page-hdr">
+          <h1>Reports</h1>
+          <p>Generate compliance, audit, and security reports for your SSL certificates</p>
+        </div>
+        <div class="report-grid">
+          <div class="report-card">
+            <div class="report-icon"><i class="fas fa-file-shield"></i></div>
+            <h3>Security Audit Report</h3>
+            <p>Full audit of all SSL certificates, cipher suites, and protocol versions across your infrastructure.</p>
+            <div class="report-meta"><i class="fas fa-clock"></i> Last generated: 2 days ago · PDF, CSV</div>
+            <button class="generate-btn" onclick="generateReport('Security Audit')"><i class="fas fa-download"></i> Generate Report</button>
+          </div>
+          <div class="report-card">
+            <div class="report-icon" style="background:var(--amber-dim);border-color:rgba(255,165,0,.2);color:var(--amber)"><i class="fas fa-hourglass-half"></i></div>
+            <h3>Expiry Forecast Report</h3>
+            <p>Upcoming certificate expirations for the next 90 days with renewal recommendations and cost estimates.</p>
+            <div class="report-meta"><i class="fas fa-clock"></i> Last generated: Today · PDF</div>
+            <button class="generate-btn" onclick="generateReport('Expiry Forecast')"><i class="fas fa-download"></i> Generate Report</button>
+          </div>
+          <div class="report-card">
+            <div class="report-icon" style="background:var(--purple-dim);border-color:rgba(168,85,247,.2);color:var(--purple)"><i class="fas fa-robot"></i></div>
+            <h3>AI Risk Assessment Report</h3>
+            <p>AI-powered analysis of vulnerabilities, weak configurations, and risk scores for each domain.</p>
+            <div class="report-meta"><i class="fas fa-clock"></i> Last generated: 1 week ago · PDF</div>
+            <button class="generate-btn" onclick="generateReport('AI Risk Assessment')"><i class="fas fa-download"></i> Generate Report</button>
+          </div>
+          <div class="report-card">
+            <div class="report-icon" style="background:var(--green-dim);border-color:rgba(0,230,118,.2);color:var(--green)"><i class="fas fa-check-double"></i></div>
+            <h3>Compliance Report</h3>
+            <p>PCI-DSS, HIPAA, and SOC 2 compliance status for all monitored domains and certificate authorities.</p>
+            <div class="report-meta"><i class="fas fa-clock"></i> Last generated: 5 days ago · PDF, DOCX</div>
+            <button class="generate-btn" onclick="generateReport('Compliance')"><i class="fas fa-download"></i> Generate Report</button>
+          </div>
+        </div>
+
+        <div class="chart-section">
+          <div class="sec-hdr"><h2>Certificate Expiry Timeline (Next 90 Days)</h2></div>
+          <div style="position:relative;height:200px">
+            <canvas id="expiryChart" role="img" aria-label="Bar chart showing upcoming certificate expirations"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- ========== SETTINGS VIEW ========== -->
+      <div class="view" id="view-settings">
+        <div class="page-hdr">
+          <h1>Settings</h1>
+          <p>Configure monitoring intervals, notifications, and integrations</p>
+        </div>
+        <div class="settings-section">
+          <h3>Monitoring</h3>
+          <div class="setting-row">
+            <div class="setting-info"><h4>Check Interval</h4><p>How often to re-check certificate validity</p></div>
+            <select class="form-select" style="width:auto;padding:7px 12px;font-size:13px"><option>Every 12 hours</option><option>Every 24 hours</option><option>Every 6 hours</option></select>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><h4>Timeout threshold</h4><p>Max seconds to wait for SSL handshake</p></div>
+            <select class="form-select" style="width:auto;padding:7px 12px;font-size:13px"><option>10 seconds</option><option>30 seconds</option><option>60 seconds</option></select>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><h4>Auto-retry on failure</h4><p>Retry failed checks before raising an alert</p></div>
+            <label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3>Notifications</h3>
+          <div class="setting-row">
+            <div class="setting-info"><h4>Email Notifications</h4><p>Send alerts to configured email addresses</p></div>
+            <label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><h4>Slack Integration</h4><p>Post alerts to a Slack channel via webhook</p></div>
+            <label class="toggle"><input type="checkbox"><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><h4>Webhook URL</h4><p>Custom webhook for third-party integrations</p></div>
+            <input class="form-input" type="text" placeholder="https://hooks.example.com/..." style="width:280px;padding:7px 12px;font-size:13px"/>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3>AI Risk Analysis</h3>
+          <div class="setting-row">
+            <div class="setting-info"><h4>Enable AI Analysis</h4><p>Use AI to generate risk assessments for each certificate</p></div>
+            <label class="toggle"><input type="checkbox" checked><div class="toggle-track"></div><div class="toggle-thumb"></div></label>
+          </div>
+          <div class="setting-row">
+            <div class="setting-info"><h4>Analysis Frequency</h4><p>How often to re-run AI risk scoring</p></div>
+            <select class="form-select" style="width:auto;padding:7px 12px;font-size:13px"><option>Weekly</option><option>Daily</option><option>On every check</option></select>
+          </div>
+        </div>
+        <button class="btn-primary" style="max-width:200px">Save Settings</button>
+      </div>
+
+      <!-- ========== REVIEW VIEW ========== -->
+      <div class="view" id="view-review">
+        <div class="page-hdr">
+          <h1>Review</h1>
+          <p>Share your feedback, rate SSLWatch, and contact our support team</p>
+        </div>
+
+        <!-- Rating Section -->
+        <div class="detail-panel" style="margin-bottom:20px">
+          <div class="sec-hdr" style="margin-bottom:18px">
+            <h2><i class="fas fa-star" style="color:var(--amber);margin-right:8px"></i>Rate SSLWatch</h2>
+          </div>
+          <p style="color:var(--text2);font-size:14px;margin-bottom:20px">How would you rate your experience with SSLWatch? Your feedback helps us improve.</p>
+
+          <!-- Star Rating -->
+          <div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:24px;background:var(--bg3);border:1px solid var(--border);border-radius:12px;margin-bottom:18px">
+            <div id="starRating" style="display:flex;gap:10px;cursor:pointer">
+              <i class="fas fa-star review-star" data-val="1" style="font-size:36px;color:var(--border2);transition:color .15s"></i>
+              <i class="fas fa-star review-star" data-val="2" style="font-size:36px;color:var(--border2);transition:color .15s"></i>
+              <i class="fas fa-star review-star" data-val="3" style="font-size:36px;color:var(--border2);transition:color .15s"></i>
+              <i class="fas fa-star review-star" data-val="4" style="font-size:36px;color:var(--border2);transition:color .15s"></i>
+              <i class="fas fa-star review-star" data-val="5" style="font-size:36px;color:var(--border2);transition:color .15s"></i>
+            </div>
+            <div id="ratingLabel" style="font-size:14px;color:var(--text3);font-family:var(--font-display);font-weight:600;letter-spacing:.3px">Click a star to rate</div>
+          </div>
+
+          <!-- Category ratings -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px">
+            <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px">
+              <div style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;font-weight:600">Ease of Use</div>
+              <div class="cat-stars" data-cat="ease" style="display:flex;gap:6px">
+                <i class="fas fa-star cat-star" data-val="1" style="font-size:20px;color:var(--border2);cursor:pointer;transition:color .15s"></i>
+                <i class="fas fa-star cat-star" data-val="2" style="font-size:20px;color:var(--border2);cursor:pointer;transition:color .15s"></i>
+                <i class="fas fa-star cat-star" data-val="3" style="font-size:20px;color:var(--border2);cursor:pointer;transition:color .15s"></i>
+                <i class="fas fa-star cat-star" data-val="4" style="font-size:20px;color:var(--border2);cursor:pointer;transition:color .15s"></i>
+                <i class="fas fa-star cat-star" data-val="5" style="font-size:20px;color:var(--border2);cursor:pointer;transition:color .15s"></i>
+              </div>
+            </div>
+            <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px">
+              <div style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;font-weight:600">Performance</div>
+              <div class="cat-stars" data-cat="perf" style="display:flex;gap:6px">
+                <i class="fas fa-star cat-star" data-val="1" style="font-size:20px;color:var(--border2);cursor:pointer;transition:color .15s"></i>
+                <i class="fas fa-star cat-star" data-val="2" style="font-size:20px;color:var(--border2);cursor:pointer;transition:color .15s"></i>
+                <i class="fas fa-star cat-star" data-val="3" style="font-size:20px;color:var(--border2);cursor:pointer;transition:color .15s"></i>
+                <i class="fas fa-star cat-star" data-val="4" style="font-size:20px;color:var(--border2);cursor:pointer;transition:color .15s"></i>
+                <i class="fas fa-star cat-star" data-val="5" style="font-size:20px;color:var(--border2);cursor:pointer;transition:color .15s"></i>
+              </div>
+            </div>
+            <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px">
+              <div style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;font-weight:600">Features</div>
+              <div class="cat-stars" data-cat="feat" style="display:flex;gap:6px">
+                <i class="fas fa-star cat-star" data-val="1" style="font-size:20px;color:var(--border2);cursor:pointer;transition:color .15s"></i>
+                <i class="fas fa-star cat-star" data-val="2" style="font-size:20px;color:var(--border2);cursor:pointer;transition:color .15s"></i>
+                <i class="fas fa-star cat-star" data-val="3" style="font-size:20px;color:var(--border2);cursor:pointer;transition:color .15s"></i>
+                <i class="fas fa-star cat-star" data-val="4" style="font-size:20px;color:var(--border2);cursor:pointer;transition:color .15s"></i>
+                <i class="fas fa-star cat-star" data-val="5" style="font-size:20px;color:var(--border2);cursor:pointer;transition:color .15s"></i>
+              </div>
+            </div>
+            <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px">
+              <div style="font-size:12px;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;font-weight:600">Support</div>
+              <div class="cat-stars" data-cat="supp" style="display:flex;gap:6px">
+                <i class="fas fa-star cat-star" data-val="1" style="font-size:20px;color:var(--border2);cursor:pointer;transition:color .15s"></i>
+                <i class="fas fa-star cat-star" data-val="2" style="font-size:20px;color:var(--border2);cursor:pointer;transition:color .15s"></i>
+                <i class="fas fa-star cat-star" data-val="3" style="font-size:20px;color:var(--border2);cursor:pointer;transition:color .15s"></i>
+                <i class="fas fa-star cat-star" data-val="4" style="font-size:20px;color:var(--border2);cursor:pointer;transition:color .15s"></i>
+                <i class="fas fa-star cat-star" data-val="5" style="font-size:20px;color:var(--border2);cursor:pointer;transition:color .15s"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Written review -->
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Your Review (optional)</label>
+            <textarea class="form-input" id="reviewText" rows="4" placeholder="Tell us what you think about SSLWatch..." style="resize:vertical;line-height:1.6"></textarea>
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin-top:14px">
+            <button class="btn-primary" style="max-width:180px" onclick="submitReview()"><i class="fas fa-paper-plane"></i> Submit Review</button>
+          </div>
+        </div>
+
+        <!-- Email / Contact Section -->
+        <div class="detail-panel">
+          <div class="sec-hdr" style="margin-bottom:18px">
+            <h2><i class="fas fa-envelope" style="color:var(--cyan);margin-right:8px"></i>Contact & Support</h2>
+          </div>
+          <p style="color:var(--text2);font-size:14px;margin-bottom:20px">Have a question, found a bug, or want to suggest a feature? Reach out to our team.</p>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label">Your Name</label>
+              <input class="form-input" id="contactName" type="text" placeholder="Jane Smith" />
+            </div>
+            <div class="form-group" style="margin-bottom:0">
+              <label class="form-label">Email Address</label>
+              <input class="form-input" id="contactEmail" type="email" placeholder="you@example.com" />
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom:14px">
+            <label class="form-label">Subject</label>
+            <select class="form-select" id="contactSubject">
+              <option value="">Select a topic...</option>
+              <option>General Feedback</option>
+              <option>Bug Report</option>
+              <option>Feature Request</option>
+              <option>Billing & Account</option>
+              <option>Technical Support</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">Message</label>
+            <textarea class="form-input" id="contactMessage" rows="4" placeholder="Describe your issue or suggestion in detail..." style="resize:vertical;line-height:1.6"></textarea>
+          </div>
+
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:16px;flex-wrap:wrap;gap:10px">
+            <div style="display:flex;gap:16px">
+              <a href="mailto:support@sslwatch.io" style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--cyan);text-decoration:none"><i class="fas fa-envelope"></i> support@sslwatch.io</a>
+              <a href="#" style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text2);text-decoration:none"><i class="fab fa-github"></i> GitHub Issues</a>
+            </div>
+            <button class="btn-primary" style="max-width:160px" onclick="submitContact()"><i class="fas fa-paper-plane"></i> Send Message</button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- Add Domain Modal -->
+<div class="modal-overlay" id="addModal" onclick="closeModalOutside(event)">
+  <div class="modal">
+    <div class="modal-hdr">
+      <h3>Add New Domain</h3>
+      <button class="modal-close" onclick="closeModal()"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Domain / URL</label>
+      <input class="form-input" id="newDomain" type="text" placeholder="e.g. example.com or https://api.example.com" />
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Alert at (days before)</label>
+        <select class="form-select" id="alertDays">
+          <option>30 days</option><option>14 days</option><option>7 days</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Check frequency</label>
+        <select class="form-select">
+          <option>Every 12h</option><option>Every 24h</option><option>Every 6h</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tags (optional)</label>
+      <input class="form-input" type="text" placeholder="e.g. production, api, staging" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="addDomain()"><i class="fas fa-shield-halved"></i> Add & Scan</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script>
+const domains = [
+  {id:1,url:'google.com',org:'Google LLC',issuer:'GTS CA 1C3',status:'valid',daysLeft:187,validFrom:'2024-09-01',validTo:'2025-09-12',grade:'A+',keyBits:2048,protocol:'TLS 1.3',country:'US',risk:'low',checked:'2 min ago'},
+  {id:2,url:'stripe.com',org:'Stripe Inc.',issuer:"Let's Encrypt",status:'valid',daysLeft:64,validFrom:'2024-11-10',validTo:'2025-05-15',grade:'A',keyBits:4096,protocol:'TLS 1.3',country:'US',risk:'low',checked:'3 min ago'},
+  {id:3,url:'api.myapp.io',org:'My App Inc.',issuer:"Let's Encrypt",status:'warn',daysLeft:22,validFrom:'2024-12-01',validTo:'2025-02-28',grade:'B',keyBits:2048,protocol:'TLS 1.2',country:'US',risk:'medium',checked:'5 min ago'},
+  {id:4,url:'staging.corp.net',org:'Corp Internal',issuer:'DigiCert',status:'warn',daysLeft:11,validFrom:'2024-07-15',validTo:'2025-02-17',grade:'B+',keyBits:2048,protocol:'TLS 1.2',country:'UK',risk:'medium',checked:'1 min ago'},
+  {id:5,url:'legacy.payments.io',org:'PayCo Ltd.',issuer:'Comodo CA',status:'critical',daysLeft:3,validFrom:'2022-02-01',validTo:'2025-02-09',grade:'C',keyBits:1024,protocol:'TLS 1.1',country:'DE',risk:'high',checked:'10 min ago'},
+  {id:6,url:'dashboard.acme.co',org:'Acme Corp',issuer:'Amazon CA',status:'valid',daysLeft:342,validFrom:'2024-09-22',validTo:'2026-09-22',grade:'A',keyBits:2048,protocol:'TLS 1.3',country:'US',risk:'low',checked:'2 min ago'},
+  {id:7,url:'cdn.staticfiles.net',org:'CDN Pro',issuer:'Cloudflare',status:'valid',daysLeft:211,validFrom:'2024-08-01',validTo:'2025-11-11',grade:'A+',keyBits:2048,protocol:'TLS 1.3',country:'US',risk:'low',checked:'4 min ago'},
+  {id:8,url:'old-blog.company.org',org:'Company Org',issuer:'VeriSign',status:'valid',daysLeft:95,validFrom:'2024-10-15',validTo:'2025-04-20',grade:'A',keyBits:2048,protocol:'TLS 1.3',country:'AU',risk:'low',checked:'8 min ago'},
+];
+
+let currentFilter = 'all';
+let activeView = 'dashboard';
+
+function statusClass(s){
+  if(s==='valid') return 'status-valid';
+  if(s==='warn') return 'status-warn';
+  if(s==='critical') return 'status-critical';
+  return 'status-expired';
+}
+function statusLabel(s){
+  if(s==='valid') return '<i class="fas fa-circle-check"></i> Valid';
+  if(s==='warn') return '<i class="fas fa-clock"></i> Expiring Soon';
+  if(s==='critical') return '<i class="fas fa-triangle-exclamation"></i> Critical';
+  return '<i class="fas fa-xmark-circle"></i> Expired';
+}
+function progressColor(d){
+  if(d>60) return 'var(--green)';
+  if(d>30) return 'var(--amber)';
+  if(d>14) return 'var(--amber)';
+  return 'var(--red)';
+}
+function progressPct(d){return Math.min(100, Math.max(2, (d/365)*100)).toFixed(1)}
+function initials(url){return url.replace('www.','').split('.')[0].slice(0,2).toUpperCase()}
+
+function renderDomainTable(list, mini){
+  let html = `<div class="domain-table">
+  <div class="dt-header">
+    <span>Domain</span><span>Status</span><span>Expires</span><span>Grade</span><span>Issuer</span><span style="text-align:right">Actions</span>
+  </div>`;
+  list.forEach(d=>{
+    const pct = progressPct(d.daysLeft);
+    const col = progressColor(d.daysLeft);
+    html += `<div class="dt-row" onclick="showDetail(${d.id})">
+      <div class="domain-name">
+        <div class="domain-favicon">${initials(d.url)}</div>
+        <div>
+          <div class="domain-url">${d.url}</div>
+          <div class="domain-org">${d.org}</div>
+        </div>
+      </div>
+      <div><span class="cert-status ${statusClass(d.status)}">${statusLabel(d.status)}</span></div>
+      <div>
+        <div class="expiry-text">${d.validTo}</div>
+        <div class="expiry-days">${d.daysLeft > 0 ? d.daysLeft+' days left' : 'Expired'}</div>
+      </div>
+      <div><span style="font-family:var(--font-mono);font-size:14px;font-weight:600;color:${col}">${d.grade}</span></div>
+      <div class="issuer-text">${d.issuer}</div>
+      <div class="row-actions" onclick="event.stopPropagation()">
+        <button class="icon-btn" title="Check now" onclick="rescanDomain(${d.id})"><i class="fas fa-rotate"></i></button>
+        <button class="icon-btn" title="View details" onclick="showDetail(${d.id})"><i class="fas fa-eye"></i></button>
+        <button class="icon-btn del" title="Remove" onclick="removeDomain(${d.id})"><i class="fas fa-trash"></i></button>
+      </div>
+    </div>`;
+  });
+  html += '</div>';
+  return html;
+}
+
+function renderMiniTable(){
+  const list = domains.slice(0,5);
+  document.getElementById('mini-domain-table').innerHTML = renderDomainTable(list, true);
+}
+
+function renderFullTable(){
+  let list = domains;
+  if(currentFilter !== 'all') list = domains.filter(d=>d.status===currentFilter);
+  document.getElementById('full-domain-table').innerHTML = renderDomainTable(list, false);
+  document.getElementById('domain-count').textContent = `(${list.length} total)`;
+}
+
+function filterDomains(val){currentFilter=val; renderFullTable();}
+
+function showView(view){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+view).classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item').forEach(b=>b.classList.remove('active'));
+  activeView = view;
+  if(view==='reports'){setTimeout(renderExpiryChart,100);}
+}
+
+function showRiskView(){
+  const d = domains[4]; // legacy.payments.io - high risk
+  showDetail(d.id);
+}
+
+function showDetail(id){
+  const d = domains.find(x=>x.id===id);
+  if(!d) return;
+  const shieldColor = d.risk==='high'?'var(--red)':d.risk==='medium'?'var(--amber)':'var(--cyan)';
+  const pct = progressPct(d.daysLeft);
+  const col = progressColor(d.daysLeft);
+  const risks = {
+    high:[
+      {icon:'fas fa-triangle-exclamation',c:'var(--red)',text:'<strong>Weak key size (1024-bit):</strong> RSA 1024-bit keys are considered cryptographically insecure by current standards. Upgrade to 2048-bit or 4096-bit immediately.'},
+      {icon:'fas fa-xmark-circle',c:'var(--red)',text:'<strong>TLS 1.1 protocol in use:</strong> TLS 1.1 was deprecated in 2021. This exposes connections to POODLE, BEAST, and other known vulnerabilities.'},
+      {icon:'fas fa-clock',c:'var(--red)',text:'<strong>Certificate expires in 3 days:</strong> Immediate renewal required to prevent service interruption and browser security warnings.'},
+      {icon:'fas fa-robot',c:'var(--purple)',text:'<strong>AI Assessment:</strong> This domain presents a HIGH risk profile. The combination of a deprecated TLS version, weak key, and imminent expiry places it in the top 5% of risk across monitored domains.'},
+    ],
+    medium:[
+      {icon:'fas fa-circle-exclamation',c:'var(--amber)',text:'<strong>TLS 1.2 in use:</strong> While not deprecated, TLS 1.3 is significantly more secure. Consider upgrading your server configuration.'},
+      {icon:'fas fa-clock',c:'var(--amber)',text:'<strong>Certificate expiring in '+d.daysLeft+' days:</strong> Plan renewal within the next 7 days to ensure uninterrupted service.'},
+      {icon:'fas fa-robot',c:'var(--purple)',text:'<strong>AI Assessment:</strong> Medium risk profile. Proactive renewal and protocol upgrade will fully resolve outstanding issues.'},
+    ],
+    low:[
+      {icon:'fas fa-circle-check',c:'var(--green)',text:'<strong>Strong configuration:</strong> TLS 1.3, 2048-bit RSA key, and a Grade '+d.grade+' security rating indicate excellent certificate hygiene.'},
+      {icon:'fas fa-robot',c:'var(--purple)',text:'<strong>AI Assessment:</strong> Low risk. This certificate meets all modern security standards. No action required at this time.'},
+    ],
+  };
+
+  const riskItems = risks[d.risk].map(r=>`<div class="risk-item"><i class="${r.icon}" style="color:${r.c}"></i><div class="risk-item-text">${r.text}</div></div>`).join('');
+  const riskScore = d.risk==='high'?87:d.risk==='medium'?54:18;
+  const countdownDays = d.daysLeft;
+  const countdownHrs = 14;
+  const countdownMins = 37;
+
+  const html = `
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+    <button class="detail-back" onclick="showView(activeView || 'domains')"><i class="fas fa-arrow-left"></i> Back</button>
+    <div><div style="font-family:var(--font-display);font-size:22px;font-weight:700">${d.url}</div><div style="font-size:13px;color:var(--text2)">${d.org} · Last checked ${d.checked}</div></div>
+    <span class="cert-status ${statusClass(d.status)}" style="margin-left:auto">${statusLabel(d.status)}</span>
+  </div>
+
+  <div class="shield-wrap" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;display:flex;flex-direction:row;align-items:center;gap:28px;margin-bottom:20px">
+    <div class="shield-anim" style="flex-shrink:0">
+      <div class="shield-ring r1" style="border-color:${shieldColor}88"></div>
+      <div class="shield-ring r2" style="border-color:${shieldColor}44"></div>
+      <div class="shield-ring r3" style="border-color:${shieldColor}22"></div>
+      <div class="shield-core" style="background:${shieldColor}22;border-color:${shieldColor}">
+        <i class="fas fa-shield-halved" style="font-size:36px;color:${shieldColor}"></i>
+      </div>
+    </div>
+    <div style="flex:1">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:6px">Certificate Lifetime Remaining</div>
+      <div class="timeline-bar"><div class="timeline-fill" style="width:${pct}%;background:${col}"></div></div>
+      <div class="timeline-labels"><span>${d.validFrom}</span><span>${d.validTo}</span></div>
+    </div>
+    <div class="countdown-row" style="flex-shrink:0;margin-top:0">
+      <div class="countdown-box"><div class="countdown-num" style="color:${col}">${countdownDays}</div><div class="countdown-label">Days</div></div>
+      <div class="countdown-box"><div class="countdown-num" style="color:${col}">${countdownHrs}</div><div class="countdown-label">Hours</div></div>
+      <div class="countdown-box"><div class="countdown-num" style="color:${col}">${countdownMins}</div><div class="countdown-label">Mins</div></div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:16px;margin-bottom:20px">
+    <div>
+      <div class="sec-hdr" style="margin-bottom:12px"><h2>Certificate Details</h2></div>
+      <div class="cert-grid">
+        <div class="cert-field"><div class="cert-field-label">Domain</div><div class="cert-field-val cyan">${d.url}</div></div>
+        <div class="cert-field"><div class="cert-field-label">Organization</div><div class="cert-field-val">${d.org}</div></div>
+        <div class="cert-field"><div class="cert-field-label">Issuer</div><div class="cert-field-val">${d.issuer}</div></div>
+        <div class="cert-field"><div class="cert-field-label">Country</div><div class="cert-field-val">${d.country}</div></div>
+        <div class="cert-field"><div class="cert-field-label">Valid From</div><div class="cert-field-val">${d.validFrom}</div></div>
+        <div class="cert-field"><div class="cert-field-label">Expires</div><div class="cert-field-val ${d.risk==='high'?'red':d.risk==='medium'?'amber':'green'}">${d.validTo}</div></div>
+        <div class="cert-field"><div class="cert-field-label">Protocol</div><div class="cert-field-val ${d.protocol==='TLS 1.3'?'green':d.protocol==='TLS 1.1'?'red':'amber'}">${d.protocol}</div></div>
+        <div class="cert-field"><div class="cert-field-label">Key Size</div><div class="cert-field-val ${d.keyBits>=2048?'green':'red'}">${d.keyBits}-bit RSA</div></div>
+        <div class="cert-field span2"><div class="cert-field-label">Security Grade</div><div class="cert-field-val" style="font-size:24px;font-weight:700;color:${col}">${d.grade}</div></div>
+      </div>
+    </div>
+    <div>
+      <div class="sec-hdr" style="margin-bottom:12px"><h2>AI Risk Analysis</h2></div>
+      <div class="risk-card" style="margin-bottom:0">
+        <div class="risk-score-wrap">
+          <div class="risk-score-circle ${d.risk}">
+            <div class="risk-score-num">${riskScore}</div>
+            <div class="risk-score-lbl">/ 100</div>
+          </div>
+          <div>
+            <div style="font-size:16px;font-weight:600;color:${d.risk==='high'?'var(--red)':d.risk==='medium'?'var(--amber)':'var(--green)'};text-transform:uppercase;letter-spacing:.5px">${d.risk} RISK</div>
+            <div style="font-size:12px;color:var(--text2);margin-top:4px;max-width:180px">AI-powered security assessment based on certificate configuration and expiry</div>
+          </div>
+        </div>
+        <div class="risk-items">${riskItems}</div>
+      </div>
+    </div>
+  </div>`;
+
+  document.getElementById('detail-content').innerHTML = html;
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-detail').classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+}
+
+// Alerts
+const alertsData = [
+  {id:1,type:'red',icon:'fas fa-xmark-circle',title:'Certificate expires in 3 days — legacy.payments.io',desc:'Immediate renewal required. TLS 1.1 is also in use which exposes users to known vulnerabilities.',domain:'legacy.payments.io',age:'1 hour ago',chip:'Critical',chipClass:''},
+  {id:2,type:'amber',icon:'fas fa-clock',title:'Certificate expiring in 11 days — staging.corp.net',desc:'Certificate renewal should be initiated within the next 5 days to avoid service disruption.',domain:'staging.corp.net',age:'3 hours ago',chip:'Warning',chipClass:'warn'},
+  {id:3,type:'amber',icon:'fas fa-clock',title:'Certificate expiring in 22 days — api.myapp.io',desc:'Routine renewal reminder. TLS 1.2 upgrade also recommended for improved security posture.',domain:'api.myapp.io',age:'6 hours ago',chip:'Notice',chipClass:'warn'},
+  {id:4,type:'cyan',icon:'fas fa-circle-check',title:'Certificate auto-renewed — dashboard.acme.co',desc:'Certificate was automatically renewed. Validity extended by 365 days. New expiry: Sep 22, 2026.',domain:'dashboard.acme.co',age:'2 days ago',chip:'Resolved',chipClass:'info'},
+];
+
+let visibleAlerts = [...alertsData];
+function renderAlerts(){
+  const el = document.getElementById('alerts-list');
+  if(!visibleAlerts.length){
+    el.innerHTML='<div class="empty-state"><i class="fas fa-bell-slash"></i><h3>No active alerts</h3><p>All certificates are healthy. You will be notified when action is needed.</p></div>';return;
+  }
+  el.innerHTML = visibleAlerts.map(a=>`
+  <div class="alert-card" id="alert-${a.id}">
+    <div class="alert-icon ${a.type}"><i class="${a.icon}"></i></div>
+    <div class="alert-body">
+      <div class="alert-title">${a.title}</div>
+      <div class="alert-desc">${a.desc}</div>
+      <div class="alert-meta"><i class="fas fa-clock"></i>${a.age} · <span class="alert-chip ${a.chipClass}">${a.chip}</span></div>
+    </div>
+    <div class="alert-actions">
+      <button class="dismiss-btn" onclick="dismissAlert(${a.id})">Dismiss</button>
+      <button class="icon-btn" onclick="showDetail(${alertsData.findIndex(x=>x.id===a.id)+1})" title="View domain"><i class="fas fa-arrow-right"></i></button>
+    </div>
+  </div>`).join('');
+}
+
+function dismissAlert(id){
+  visibleAlerts=visibleAlerts.filter(a=>a.id!==id);
+  renderAlerts();
+  toast('Alert dismissed','info');
+}
+function dismissAll(){visibleAlerts=[];renderAlerts();toast('All alerts dismissed','info');}
+
+// Modal
+function openModal(){document.getElementById('addModal').classList.add('open')}
+function closeModal(){document.getElementById('addModal').classList.remove('open')}
+function closeModalOutside(e){if(e.target===document.getElementById('addModal'))closeModal()}
+
+function addDomain(){
+  const val = document.getElementById('newDomain').value.trim();
+  if(!val){toast('Please enter a domain','error');return;}
+  const url = val.replace(/^https?:\/\//,'').replace(/\//,'');
+  const newD = {
+    id:domains.length+1,url,org:'Unknown Org',issuer:"Let's Encrypt",status:'valid',
+    daysLeft:90+Math.floor(Math.random()*200),validFrom:'2025-01-01',validTo:'2025-10-01',
+    grade:'A',keyBits:2048,protocol:'TLS 1.3',country:'US',risk:'low',checked:'Just now'
+  };
+  domains.unshift(newD);
+  currentFilter = 'all';
+  closeModal();
+  document.getElementById('newDomain').value='';
+  // Reset the status dropdown to "All Status"
+  const filterSelect = document.querySelector('#view-domains select');
+  if(filterSelect) filterSelect.value = 'all';
+  renderMiniTable();renderFullTable();
+  toast(`Scanning ${url}...`,'info');
+  setTimeout(()=>toast(`${url} added successfully`,'success'),1800);
+}
+
+function removeDomain(id){
+  const idx=domains.findIndex(d=>d.id===id);
+  if(idx>-1){domains.splice(idx,1);}
+  renderMiniTable();renderFullTable();
+  toast('Domain removed','info');
+}
+
+function rescanDomain(id){
+  const d=domains.find(x=>x.id===id);
+  if(d) toast(`Rescanning ${d.url}...`,'info');
+  setTimeout(()=>{if(d)toast(`${d.url} — certificate valid`,'success');},1500);
+}
+
+function refreshAll(){
+  toast('Refreshing all domains...','info');
+  setTimeout(()=>toast('All domains updated successfully','success'),2000);
+}
+
+function generateReport(name){
+  toast(`Generating ${name} Report...`,'info');
+  setTimeout(()=>toast(`${name} Report ready for download`,'success'),2200);
+}
+
+// Toast
+function toast(msg,type='info'){
+  const wrap=document.getElementById('toastWrap');
+  const t=document.createElement('div');
+  const icons={success:'fas fa-circle-check',error:'fas fa-circle-xmark',info:'fas fa-circle-info'};
+  t.className=`toast ${type}`;
+  t.innerHTML=`<i class="${icons[type]} toast-icon"></i><span class="toast-text">${msg}</span>`;
+  wrap.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(40px)';t.style.transition='all .3s';setTimeout(()=>t.remove(),300)},3000);
+}
+
+// Charts
+function renderHealthChart(){
+  const ctx=document.getElementById('healthChart');if(!ctx)return;
+  const labels=['Jan 14','Jan 17','Jan 20','Jan 23','Jan 26','Jan 29','Feb 1','Feb 4','Feb 7','Feb 10'];
+  new Chart(ctx,{
+    type:'line',
+    data:{
+      labels,
+      datasets:[
+        {label:'Valid',data:[6,6,6,5,5,5,5,5,5,5],borderColor:'#34D399',backgroundColor:'rgba(52,211,153,.08)',fill:true,tension:.4,pointRadius:3,pointBackgroundColor:'#34D399'},
+        {label:'Expiring',data:[1,1,1,2,2,2,2,2,2,2],borderColor:'#FBBF24',backgroundColor:'rgba(251,191,36,.06)',fill:true,tension:.4,pointRadius:3,pointBackgroundColor:'#FBBF24'},
+        {label:'Critical',data:[1,1,1,1,1,1,1,1,1,1],borderColor:'#FB7185',backgroundColor:'rgba(251,113,133,.05)',fill:true,tension:.4,pointRadius:3,pointBackgroundColor:'#FB7185'},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#4A5A7A',font:{size:11}},grid:{color:'rgba(46,37,72,.6)'}},y:{ticks:{color:'#4A5A7A',font:{size:11},stepSize:1},grid:{color:'rgba(46,37,72,.6)'},min:0,max:8}}}
+  });
+}
+function renderStatusChart(){
+  const ctx=document.getElementById('statusChart');if(!ctx)return;
+  new Chart(ctx,{
+    type:'doughnut',
+    data:{
+      labels:['Valid','Expiring','Critical'],
+      datasets:[{data:[5,2,1],backgroundColor:['#34D399','#FBBF24','#FB7185'],borderColor:'#1E1A2E',borderWidth:3,hoverOffset:6}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,cutout:'70%',plugins:{legend:{display:false}}}
+  });
+}
+function renderExpiryChart(){
+  const ctx=document.getElementById('expiryChart');if(!ctx)return;
+  if(ctx._chartRef){ctx._chartRef.destroy();}
+  const c=new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct'],
+      datasets:[{label:'Expiring',data:[0,3,0,0,1,0,0,1,1,0],backgroundColor:['#FBBF2499','#FB718599','#FBBF2499','#34D39999','#FBBF2499','#34D39999','#34D39999','#FBBF2499','#FBBF2499','#34D39999'],borderRadius:4}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#4A5A7A',font:{size:11}},grid:{display:false}},y:{ticks:{color:'#4A5A7A',stepSize:1},grid:{color:'rgba(46,37,72,.6)'},min:0,max:4}}}
+  });
+  ctx._chartRef=c;
+}
+
+// ===== AUTH LOGIC =====
+const DEMO_USER = { email: 'demo@sslwatch.io', password: 'password123', name: 'Demo User' };
+const registeredUsers = [{ ...DEMO_USER }];
+
+function switchAuthTab(tab) {
+  document.querySelectorAll('.auth-tab').forEach((t,i)=>{
+    t.classList.toggle('active', (i===0&&tab==='login')||(i===1&&tab==='signup'));
+  });
+  document.getElementById('authLogin').style.display = tab==='login'?'block':'none';
+  document.getElementById('authSignup').style.display = tab==='signup'?'block':'none';
+  document.getElementById('loginError').classList.remove('show');
+  document.getElementById('signupError').classList.remove('show');
+}
+
+function showAuthError(formId, msg) {
+  const el = document.getElementById(formId+'Error');
+  document.getElementById(formId+'ErrorMsg').textContent = msg;
+  el.classList.add('show');
+}
+
+function unlockApp(name) {
+  const initials = name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  document.getElementById('avatarInitial').textContent = initials;
+  document.getElementById('avatarName').textContent = name.split(' ')[0];
+  const overlay = document.getElementById('authOverlay');
+  overlay.style.opacity = '0';
+  overlay.style.transition = 'opacity .4s';
+  setTimeout(()=>overlay.classList.add('hidden'), 400);
+  toast(`Welcome back, ${name.split(' ')[0]}!`, 'success');
+}
+
+function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass  = document.getElementById('loginPassword').value;
+  if (!email || !pass) { showAuthError('login','Please enter your email and password.'); return; }
+  const user = registeredUsers.find(u=>u.email.toLowerCase()===email.toLowerCase()&&u.password===pass);
+  if (!user) { showAuthError('login','Invalid email or password. Try demo@sslwatch.io / password123'); return; }
+  unlockApp(user.name);
+}
+
+function doSignup() {
+  const name    = document.getElementById('signupName').value.trim();
+  const email   = document.getElementById('signupEmail').value.trim();
+  const pass    = document.getElementById('signupPassword').value;
+  const confirm = document.getElementById('signupConfirm').value;
+  if (!name||!email||!pass||!confirm) { showAuthError('signup','Please fill in all fields.'); return; }
+  if (pass.length < 8) { showAuthError('signup','Password must be at least 8 characters.'); return; }
+  if (pass !== confirm) { showAuthError('signup','Passwords do not match.'); return; }
+  if (registeredUsers.find(u=>u.email.toLowerCase()===email.toLowerCase())) {
+    showAuthError('signup','An account with this email already exists.'); return;
+  }
+  registeredUsers.push({ email, password: pass, name });
+  unlockApp(name);
+}
+
+function oauthLogin(provider) {
+  toast(`Connecting to ${provider}...`, 'info');
+  setTimeout(()=>unlockApp('Demo User'), 1200);
+}
+
+function forgotPassword() {
+  const email = document.getElementById('loginEmail').value.trim();
+  if (!email) { showAuthError('login','Enter your email first, then click Forgot password.'); return; }
+  toast(`Reset link sent to ${email}`, 'success');
+}
+
+function doLogout() {
+  if (!confirm('Sign out of SSLWatch?')) return;
+  const overlay = document.getElementById('authOverlay');
+  overlay.classList.remove('hidden');
+  overlay.style.opacity = '0';
+  requestAnimationFrame(()=>{ overlay.style.transition='opacity .3s'; overlay.style.opacity='1'; });
+  document.getElementById('loginPassword').value='';
+  document.getElementById('loginError').classList.remove('show');
+}
+// ===== END AUTH LOGIC =====
+
+// Init
+window.onload=()=>{
+  renderMiniTable();
+  renderFullTable();
+  renderAlerts();
+  setTimeout(renderHealthChart,200);
+  setTimeout(renderStatusChart,200);
+  // Enter key support for auth
+  ['loginEmail','loginPassword'].forEach(id=>{
+    document.getElementById(id).addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+  });
+  ['signupName','signupEmail','signupPassword','signupConfirm'].forEach(id=>{
+    document.getElementById(id).addEventListener('keydown',e=>{ if(e.key==='Enter') doSignup(); });
+  });
+};
+
+// ===== REVIEW LOGIC =====
+const ratingLabels = ['','Terrible','Poor','Average','Good','Excellent!'];
+let selectedRating = 0;
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Main star rating
+  const stars = document.querySelectorAll('#starRating .review-star');
+  stars.forEach(star => {
+    star.addEventListener('mouseover', () => highlightStars(stars, +star.dataset.val));
+    star.addEventListener('mouseout', () => highlightStars(stars, selectedRating));
+    star.addEventListener('click', () => {
+      selectedRating = +star.dataset.val;
+      highlightStars(stars, selectedRating);
+      document.getElementById('ratingLabel').textContent = ratingLabels[selectedRating];
+      document.getElementById('ratingLabel').style.color = selectedRating >= 4 ? 'var(--green)' : selectedRating === 3 ? 'var(--amber)' : 'var(--red)';
+    });
+  });
+
+  // Category stars
+  document.querySelectorAll('.cat-stars').forEach(group => {
+    const catStars = group.querySelectorAll('.cat-star');
+    let catSelected = 0;
+    catStars.forEach(s => {
+      s.addEventListener('mouseover', () => highlightStars(catStars, +s.dataset.val));
+      s.addEventListener('mouseout', () => highlightStars(catStars, catSelected));
+      s.addEventListener('click', () => { catSelected = +s.dataset.val; highlightStars(catStars, catSelected); });
+    });
+  });
+});
+
+function highlightStars(stars, val) {
+  stars.forEach(s => { s.style.color = +s.dataset.val <= val ? 'var(--amber)' : 'var(--border2)'; });
+}
+
+function submitReview() {
+  if (!selectedRating) { toast('Please select a star rating first.', 'warn'); return; }
+  toast(`Thanks for your ${ratingLabels[selectedRating]} review! ⭐`, 'success');
+  document.getElementById('reviewText').value = '';
+  selectedRating = 0;
+  document.querySelectorAll('#starRating .review-star').forEach(s => s.style.color = 'var(--border2)');
+  document.querySelectorAll('.cat-star').forEach(s => s.style.color = 'var(--border2)');
+  document.getElementById('ratingLabel').textContent = 'Click a star to rate';
+  document.getElementById('ratingLabel').style.color = 'var(--text3)';
+}
+
+function submitContact() {
+  const name = document.getElementById('contactName').value.trim();
+  const email = document.getElementById('contactEmail').value.trim();
+  const subject = document.getElementById('contactSubject').value;
+  const msg = document.getElementById('contactMessage').value.trim();
+  if (!name || !email || !subject || !msg) { toast('Please fill in all contact fields.', 'warn'); return; }
+  toast(`Message sent! We'll reply to ${email} soon.`, 'success');
+  document.getElementById('contactName').value = '';
+  document.getElementById('contactEmail').value = '';
+  document.getElementById('contactSubject').value = '';
+  document.getElementById('contactMessage').value = '';
+}
+// ===== END REVIEW LOGIC =====
+
+// Nav active state tracking
+document.querySelectorAll('.nav-btn').forEach((btn,i)=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+</script>
+</html>
