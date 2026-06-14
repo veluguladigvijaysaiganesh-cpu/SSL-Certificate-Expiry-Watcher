@@ -1,5 +1,4 @@
 Team Name:Team 5Team 
-Members
 S.No  Name
 1.    VUDATTA SATYA VENKATA NAGA PRAJNA
 2.    Rai Bhuvaneswari Devi
