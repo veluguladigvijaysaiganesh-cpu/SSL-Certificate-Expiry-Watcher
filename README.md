@@ -1,205 +1,145 @@
-Team Name:Team 5Team MembersS.NoName1VUDATTA SATYA VENKATA NAGA PRAJNA2Rai Bhuvaneswari Devi3VELUGULA DIGVIJAY SAI GANESH4PERLA SOMESWARI
-# SSL Certificate Expiry Watcher
-
-SSL Certificate Expiry Watcher is a professional web application for monitoring SSL/TLS certificates, checking expiry dates, reviewing certificate health, and receiving practical renewal guidance. The project is organized with a separate frontend and backend while keeping the local development workflow simple through one command.
-
-## Project Summary
-
-| Area | Details |
-| --- | --- |
-| Project type | Full-stack SSL/TLS certificate monitoring dashboard |
-| Frontend | HTML, CSS, JavaScript, Chart.js |
-| Backend | Node.js HTTP server |
-| Database | SQLite managed through Python |
-| Security utilities | Python SSL checker and local API key vault |
-| AI support | Server-side chatbot proxy with safe fallback responses |
-| Frontend URL | `http://localhost:3000` |
-| Backend API URL | `http://localhost:4000` |
-
-## Key Features
-
-- Professional dashboard for certificate health, expiry status, alerts, reports, settings, and review pages
-- Live SSL certificate scan using backend TLS checks
-- Persistent monitored-domain storage with SQLite
-- Frontend/backend environment separation
-- Safe server-side AI provider integration
-- Optional local API key vault utility
-- VS Code tasks and debug configuration
-- Clean documentation for setup, architecture, API routes, security, and user workflow
-
-## Folder Structure
-
-```text
-ssl/
-  backend/
-    server.js
-    database/
-      db.py
-      schema.sql
-      sslwatch.db
-    security_utils/
-      ssl_checker.py
-      api_key_vault.py
-    .env.example
-
-  frontend/
-    index.html
-    style.css
-    app.js
-    config.js
-    server.js
-    .env.example
-
-  docs/
-    API.md
-    ARCHITECTURE.md
-    DEVELOPMENT.md
-    USER_GUIDE.md
-
-  sample_data/
-    domains.csv
-
-  .vscode/
-    launch.json
-    settings.json
-    tasks.json
-
-  .env.example
-  ENVIRONMENT.md
-  SECURITY.md
-  package.json
-  README.md
-```
-
-## Quick Start
-
-1. Open the project folder in VS Code.
-
-```text
-C:\Users\user\OneDrive\Documents\ssl
-```
-
-2. Start the application.
+### A `FormData` polyfill for the browser ...and a module for NodeJS (`New!`)
 
 ```bash
-npm start
+npm install formdata-polyfill
 ```
 
-3. Open the dashboard.
+The browser polyfill will likely have done its part already, and i hope you stop supporting old browsers c",)<br>
+But NodeJS still laks a proper FormData<br>The good old form-data package is a very old and isn't spec compatible and dose some abnormal stuff to construct and read FormData instances that other http libraries are not happy about when it comes to follow the spec.
 
-```text
-http://localhost:3000
+### The NodeJS / ESM version
+- The modular (~2.3 KiB minified uncompressed) version of this package is independent of any browser stuff and don't patch anything
+- It's as pure/spec compatible as it possible gets the test are run by WPT.
+- It's compatible with [node-fetch](https://github.com/node-fetch/node-fetch).
+- It have higher platform dependencies as it uses classes, symbols, ESM & private fields
+- Only dependency it has is [fetch-blob](https://github.com/node-fetch/fetch-blob)
+
+```js
+// Node example
+import fetch from 'node-fetch'
+import File from 'fetch-blob/file.js'
+import { fileFromSync } from 'fetch-blob/from.js'
+import { FormData } from 'formdata-polyfill/esm.min.js'
+
+const file = fileFromSync('./README.md')
+const fd = new FormData()
+
+fd.append('file-upload', new File(['abc'], 'hello-world.txt'))
+fd.append('file-upload', file)
+
+// it's also possible to append file/blob look-a-like items
+// if you have streams coming from other destinations
+fd.append('file-upload', {
+  size: 123,
+  type: '',
+  name: 'cat-video.mp4',
+  stream() { return stream },
+  [Symbol.toStringTag]: 'File'
+})
+
+fetch('https://httpbin.org/post', { method: 'POST', body: fd })
 ```
 
-The backend API runs separately at:
+----
 
-```text
-http://localhost:4000
+It also comes with way to convert FormData into Blobs - it's not something that every developer should have to deal with.
+It's mainly for [node-fetch](https://github.com/node-fetch/node-fetch) and other http library to ease the process of serializing a FormData into a blob and just wish to deal with Blobs instead (Both Deno and Undici adapted a version of this [formDataToBlob](https://github.com/jimmywarting/FormData/blob/5ddea9e0de2fc5e246ab1b2f9d404dee0c319c02/formdata-to-blob.js) to the core and passes all WPT tests run by the browser itself)
+```js
+import { Readable } from 'node:stream'
+import { FormData, formDataToBlob } from 'formdata-polyfill/esm.min.js'
+
+const blob = formDataToBlob(new FormData())
+fetch('https://httpbin.org/post', { method: 'POST', body: blob })
+
+// node built in http and other similar http library have to do:
+const stream = Readable.from(blob.stream())
+const req = http.request('http://httpbin.org/post', {
+  method: 'post',
+  headers: {
+    'Content-Length': blob.size,
+    'Content-Type': blob.type
+  }
+})
+stream.pipe(req)
 ```
 
-Opening `http://localhost:4000` shows the backend/database status interface, not the frontend dashboard.
+PS: blob & file that are appended to the FormData will not be read until any of the serialized blob read-methods gets called
+...so uploading very large files is no biggie
 
-4. Use the demo login.
+### Browser polyfill
 
-```text
-Email: demo@sslwatch.io
-Password: password123
+usage:
+
+```js
+import 'formdata-polyfill' // that's it
 ```
 
-## Environment Setup
+The browser polyfill conditionally replaces the native implementation rather than fixing the missing functions,
+since otherwise there is no way to get or delete existing values in the FormData object.
+Therefore this also patches `XMLHttpRequest.prototype.send` and `fetch` to send the `FormData` as a blob,
+and `navigator.sendBeacon` to send native `FormData`.
 
-Copy the root environment example before adding real secrets:
+I was unable to patch the Response/Request constructor
+so if you are constructing them with FormData then you need to call `fd._blob()` manually.
 
-```powershell
-Copy-Item .env.example .env
+```js
+new Request(url, {
+  method: 'post',
+  body: fd._blob ? fd._blob() : fd
+})
 ```
 
-Recommended local values:
+Dependencies
+---
 
-```env
-PORT=4000
-BACKEND_PORT=4000
-FRONTEND_PORT=3000
-NODE_ENV=development
-PYTHON_BIN=python
+If you need to support IE <= 9 then I recommend you to include eligrey's [blob.js]
+(which i hope you don't - since IE is now dead)
 
-AI_PROVIDER=openai
-AI_MODEL=gpt-4.1-mini
-AI_API_KEY=your_real_api_key_here
+<details>
+    <summary>Updating from 2.x to 3.x</summary>
 
-ALLOWED_ORIGINS=http://localhost:3000
-FRONTEND_APP_NAME=SSLWatch
-FRONTEND_APP_ENV=development
-FRONTEND_API_BASE_URL=http://localhost:4000
-FRONTEND_REQUEST_TIMEOUT_MS=15000
+Previously you had to import the polyfill and use that,
+since it didn't replace the global (existing) FormData implementation.
+But now it transparently calls `_blob()` for you when you are sending something with fetch or XHR,
+by way of monkey-patching the `XMLHttpRequest.prototype.send` and `fetch` functions.
+
+So you maybe had something like this:
+
+```javascript
+var FormData = require('formdata-polyfill')
+var fd = new FormData(form)
+xhr.send(fd._blob())
 ```
 
-Keep real API keys in `.env`, not in frontend files.
+There is no longer anything exported from the module
+(though you of course still need to import it to install the polyfill),
+so you can now use the FormData object as normal:
 
-## Common Commands
-
-| Command | Purpose |
-| --- | --- |
-| `npm start` | Start frontend on `3000` and backend on `4000` |
-| `npm run dev` | Start frontend on `3000` and backend on `4000` |
-| `npm run backend:dev` | Start only the backend API on `4000` |
-| `npm run frontend:dev` | Start only the frontend static server on `3000` |
-| `npm run db:init` | Initialize or validate SQLite database |
-| `npm run ssl:check` | Run the Python SSL checker against `google.com` |
-| `npm run vault:list` | List locally stored API key vault services |
-| `python backend/database/db.py list` | Print monitored domains as JSON |
-| `python backend/security_utils/ssl_checker.py example.com` | Check one domain directly |
-
-On Windows PowerShell, if `npm` is blocked by execution policy, use `npm.cmd`:
-
-```powershell
-npm.cmd start
+```javascript
+require('formdata-polyfill')
+var fd = new FormData(form)
+xhr.send(fd)
 ```
 
-## Backend API Overview
+</details>
 
-| Method | Route | Purpose |
-| --- | --- | --- |
-| `GET` | `http://localhost:3000/config.js` | Serve browser-safe frontend config |
-| `GET` | `/api/config` | Return safe runtime AI status |
-| `GET` | `/api/domains` | List monitored domains |
-| `POST` | `/api/domains` | Create or update a monitored domain |
-| `DELETE` | `/api/domains/:id` | Delete a monitored domain |
-| `POST` | `/api/check-ssl` | Run live SSL certificate check |
-| `POST` | `/api/chat` | Ask SSLBot through server-side AI proxy |
 
-Full API details are in `docs/API.md`.
 
-## Documentation Index
+Native Browser compatibility (as of 2021-05-08)
+---
+Based on this you can decide for yourself if you need this polyfill.
 
-- `docs/USER_GUIDE.md` explains how to use the dashboard.
-- `docs/ARCHITECTURE.md` explains frontend, backend, database, and security utility design.
-- `docs/API.md` documents every backend route and payload.
-- `docs/DEVELOPMENT.md` explains local development, testing, and troubleshooting.
-- `ENVIRONMENT.md` explains frontend/backend environment setup.
-- `SECURITY.md` explains API key safety and secure operating rules.
+[![screenshot](https://user-images.githubusercontent.com/1148376/117550329-0993aa80-b040-11eb-976c-14e31f1a3ba4.png)](https://developer.mozilla.org/en-US/docs/Web/API/FormData#Browser_compatibility)
 
-## Security Model
 
-The frontend never receives private API keys. Browser code calls `http://localhost:4000/api/...`, and the backend reads secrets from `.env`. The frontend `config.js` file only contains public configuration values such as app name, environment, API base URL, and request timeout.
 
-If no AI key is configured, SSLBot still works with built-in SSL guidance. This keeps the demo functional without exposing secrets.
+This normalizes support for the FormData API:
 
-## Project Status
+ - `append` with filename
+ - `delete()`, `get()`, `getAll()`, `has()`, `set()`
+ - `entries()`, `keys()`, `values()`, and support for `for...of`
+ - Available in web workers (just include the polyfill)
 
-Current local checks:
-
-- Backend syntax validation passes
-- Frontend syntax validation passes
-- SQLite initialization passes
-- `/config.js` route works
-- `/api/domains` route works
-- Python SSL checker works
-
-## Suggested Presentation Description
-
-SSL Certificate Expiry Watcher helps teams monitor certificate expiry risk before users encounter HTTPS warnings or service outages. It combines a professional monitoring dashboard, live SSL checks, persistent domain storage, AI-assisted SSL guidance, and safe secret handling through a separated frontend/backend architecture.
-  scripts/
-    start-dev.js
-
-"# SSL-Certificate-Expiry-Watcher" 
+  [npm-image]: https://img.shields.io/npm/v/formdata-polyfill.svg
+  [npm-url]: https://www.npmjs.com/package/formdata-polyfill
+  [blob.js]: https://github.com/eligrey/Blob.js
